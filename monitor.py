@@ -1,6 +1,10 @@
-from cpu import Cpu, CpuMeta, ExecError
-from memory import Memory
+from operator import itemgetter
+import os
+import textwrap
+
+from cpu import *
 from disassemble import Disassembler
+from memory import Memory
 
 
 class Monitor(metaclass=CpuMeta):
@@ -19,36 +23,62 @@ class Monitor(metaclass=CpuMeta):
         self._mem.load(self._level)
         self._cpu = Cpu(self._mem)
         self._d = Disassembler(self._mem.labels, self._mem.strings)
-        self._brk = set()
+        self._unlocked = False
+        self._bps = {}
         self.E()
 
-    def B(self, target):
-        if isinstance(target, str):
-            target = self._d.find_label(target)
+    def brk(self, target=False):
+        if target is None:
+            self._bps = {}
+            return
+        elif not target:
+            points = sorted(list(self._bps.values()))
+            for (addr, label) in points:
+                print("%04x  %s" % (addr, '' if label is None else label))
+            return
+        elif isinstance(target, str):
+            addr = self._d.find_label(target)
             if target is None:
                 print("ERROR: unknown label")
                 return
-        if isinstance(target, int):
-            if target > 0xffff:
-                print("ERROR: address too large")
-                return
-        if target in self._brk:
-            self._brk.remove(target)
-            print("clear breakpoint %04x" % target)
+        elif isinstance(target, int) and target < 0x10000:
+            addr = target
+            target = None
         else:
-            self._brk.add(target)
-            print("set breakpoint %04x" % target)
+            print("cannot set breakpoint %s" % target)
+
+        bps = self._bps
+        if addr in bps:
+            del bps[addr]
+            print("clear breakpoint %04x" % addr)
+        else:
+            bps[addr] = (addr, target)
+            print("set breakpoint %04x" % addr)
 
     def C(self):
         try:
             c = self._cpu
             c.exec()
-            inst = c.next_inst()
-            while inst.startpc not in self._brk:
-                c.exec_inst(inst)
-                inst = c.next_inst()
+            #inst = c.next_inst()
+            while c.pc not in self._bps:
+                c.exec()
+            self.E()
         except ExecError as e:
             print(str(e))
+        except DoorUnlocked:
+            self._unlocked = True
+            print("DOOR UNLOCKED!")
+
+    def D(self, line1, line2):
+        line1 &= 0xfff0
+        line2 &= 0xfff0
+        for line in range(line1, line2+0x10, 0x10):
+            data = self._mem[line:line+0x10]
+            asc = map(lambda x: chr(x) if x >= 32 and x < 127 else '.', data)
+            asc = ''.join(asc)
+            dump = ''.join(map(lambda x: "%02x" % x, data))
+            dump = ' '.join(textwrap.wrap(dump, 4))
+            print("%04x:   %s   %s" % (line, dump, asc))
 
     def E(self):
         c = self._cpu
@@ -62,16 +92,22 @@ class Monitor(metaclass=CpuMeta):
         print('-' * 78)
         inst = c.next_inst()
         mnem, ops = self._d.disassemble(inst)
-        print('%04x: %-5s %s' %
+        print('%04x: %-6s %s' %
               (inst.startpc, mnem, ', '.join(ops)))
 
-    def I(self, ibytes):
+    def I(self, ibytes=None):
         try:
             c = self._cpu
-            if ibytes.startswith('0x'):
-                ibytes = bytes.fromhex(ibytes[2:])
-            else:
-                ibytes = bytes(ibytes, 'ascii')
+            if ibytes is None:
+                ibytes = b''
+            if isinstance(ibytes, str):
+                if ibytes.startswith('0x'):
+                    ibytes = bytes.fromhex(ibytes[2:])
+                else:
+                    ibytes = bytes(ibytes, 'ascii')
+            if not isinstance(ibytes, bytes):
+                print("ERROR: input must be string or bytes")
+                return
             c.send_input(ibytes)
         except ExecError as e:
             print(str(e))
@@ -83,3 +119,29 @@ class Monitor(metaclass=CpuMeta):
             self.E()
         except ExecError as e:
             print(str(e))
+        except DoorUnlocked:
+            self._unlocked = True
+            print("DOOR UNLOCKED!")
+
+
+def test(soldir):
+    f = open(os.path.join(soldir, 'solutions.txt'))
+    ok = True
+
+    for line in f:
+        level, sol = line.split()
+        m = Monitor(os.path.join(soldir, level))
+        try:
+            m.C()
+            for inp in sol.split(','):
+                m.I(bytes.fromhex(inp))
+                m.C()
+            if not m._unlocked:
+                ok = False
+                print(level, "failed")
+        except:
+            print(level, " failed")
+            ok = False
+
+    f.close()
+    return ok

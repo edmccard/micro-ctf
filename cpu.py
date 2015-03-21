@@ -51,10 +51,7 @@ class Cpu(metaclass=CpuMeta):
         return Instruction(self._mem, self._r[Reg.PC])
 
     def exec(self):
-        try:
-            self.exec_inst(self.next_inst())
-        except DecodeError as e:
-            self.set_flag(Flag.CPUOFF, True)
+        self.exec_inst(self.next_inst())
 
     def exec_inst(self, inst):
         if self.flag(Flag.CPUOFF):
@@ -64,6 +61,8 @@ class Cpu(metaclass=CpuMeta):
         try:
             if not inst.valid:
                 raise ExecError('illegal instruction')
+            if (self._r[Reg.PC] & 0x1) != 0:
+                raise ExecError('PC unaligned')
             self._r[Reg.PC] = inst.pc
             if inst.format == Format.SINGLE:
                 self._exec_single(inst)
@@ -176,7 +175,8 @@ class Cpu(metaclass=CpuMeta):
             self._wait_input = TestInput(self._read_data(top + 6),
                                          self._read_data(top + 8))
         elif interrupt == 0xff:
-            raise ExecError("DOOR UNLOCKED!")
+            self.set_flag(Flag.CPUOFF, True)
+            raise DoorUnlocked()
 
     def RRC(self, v1, width):
         self._r[Reg.SR] &= 0xff
@@ -280,7 +280,11 @@ class Cpu(metaclass=CpuMeta):
         return self.ADDC(-(v1 - (width.max + 1)), v2, width)
 
     def SUB(self, v1, v2, width):
-        return self.ADD(-(v1 - (width.max + 1)), v2, width)
+        v2 = v2 & width.max
+        result = self.ADD(-(v1 - (width.max + 1)), v2, width)
+        if v1 == 0:
+            self.set_flag(Flag.C, True)
+        return result
 
     def CMP(self, v1, v2, width):
         self.SUB(v1, v2, width)

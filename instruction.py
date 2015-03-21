@@ -43,8 +43,6 @@ class Instruction:
     _widths = [Width.Word, Width.Byte]
 
     def __init__(self, mem, pc):
-        if (pc & 0x1) != 0:
-            raise DecodeError('PC unaligned')
         self.startpc = self.pc = pc
         word = self._read_pc(mem)
         self.valid = False
