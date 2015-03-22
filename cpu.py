@@ -1,9 +1,5 @@
-# 0x80
-# 0x00
-# char is at sp + 8
-
-
 from array import array
+import random
 
 from instruction import *
 from instruction import AddrMode as AM
@@ -23,6 +19,7 @@ class CpuMeta(type):
 
 class Cpu(metaclass=CpuMeta):
     def __init__(self, mem):
+        random.seed()
         self._mem = mem
         self._r = array('H', [0] * 16)
         self._r[Reg.PC] = self._read_data(0xfffe)
@@ -174,6 +171,8 @@ class Cpu(metaclass=CpuMeta):
         elif interrupt == 0x82:
             self._wait_input = TestInput(self._read_data(top + 6),
                                          self._read_data(top + 8))
+        elif interrupt == 0xa0:
+            self._r[15] = random.randint(0, 0xffff)
         elif interrupt == 0xff:
             self.set_flag(Flag.CPUOFF, True)
             raise DoorUnlocked()
