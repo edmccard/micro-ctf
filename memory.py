@@ -1,3 +1,4 @@
+import codecs
 import re
 import sys
 import textwrap
@@ -13,6 +14,16 @@ class Memory(bytearray):
     labels  - a list of (address, label name)
     strings - a list of (address, text)
     """
+
+    _unicode_escape = codecs.getdecoder('unicode_escape')
+
+    @staticmethod
+    def _file_reader(f):
+        for line in f:
+            line = line.strip()
+            if line != '':
+                yield line
+
     def __init__(self):
         super().__init__(65536)
         self._write_addr = 0
@@ -30,9 +41,11 @@ class Memory(bytearray):
 
     def _load_lst(self, f):
         hexword = re.compile('^[0-9a-f][0-9a-f][0-9a-f][0-9a-f]$')
+        sblock = 0
 
-        for line in _stripped(f):
-            if line == '...':
+        for line in self._file_reader(f):
+            line = line.split('%%')[0]
+            if line == '...' or line == '':
                 continue
             first, rest = line.split(maxsplit=1)
             addr = self._write_addr = int(first[:4], 16)
@@ -41,11 +54,14 @@ class Memory(bytearray):
                 self.labels.append((addr, rest[1:-1]))
             elif rest.startswith('.'):
                 assert rest == '.strings:', 'unknown directive'
-                self.labels.append((addr, '.strings'))
+                self.labels.append((addr, '.strings' + str(sblock)))
+                sblock += 1
             elif rest.startswith('"'):
-                assert self.labels[-1][1] == '.strings', 'unexpected string'
+                assert self.labels[-1][1].startswith('.strings'), \
+                    'unexpected string'
                 text = rest[1:-1]
-                for c in text:
+                etext = self._unicode_escape(text)[0]
+                for c in etext:
                     self._write_byte(ord(c))
                 self._write_byte(0)
                 self.strings.append((addr, text))
@@ -58,7 +74,7 @@ class Memory(bytearray):
         self.labels.append((self._write_addr, '.end'))
 
     def _load_hex(self, f):
-        for line in _stripped(f):
+        for line in self._file_reader(f):
             first, *rest = line.split()[:9]
             if rest[0] == '*':
                 continue
@@ -113,10 +129,12 @@ class Memory(bytearray):
         for idx, (base, label) in enumerate(self.labels):
             if label == '.end':
                 break
-            if label == '.strings':
+            if label.startswith('.strings'):
+                nextbase = self.labels[idx+1][0]
                 print("%04x .strings:" % base, file=file)
                 for addr, text in self.strings:
-                    print('%04x: "%s"' % (addr, text), file=file)
+                    if addr >= base and addr < nextbase:
+                        print('%04x: "%s"' % (addr, text), file=file)
                 continue
             print("%04x <%s>" % (base, label), file=file)
             while base < self.labels[idx+1][0]:
@@ -131,10 +149,3 @@ class Memory(bytearray):
                 line = "%04x:  %-14s %-9s %s" % (base, raw, mnemonic, ops)
                 print(line.strip(), file=file)
                 base = inst.pc
-
-
-def _stripped(f):
-    for line in f:
-        line = line.strip()
-        if line != '':
-            yield line
