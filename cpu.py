@@ -23,6 +23,8 @@ class Cpu(metaclass=CpuMeta):
         self._mem = mem
         self._r = array('H', [0] * 16)
         self._r[Reg.PC] = self._read_data(0xfffe)
+        self._pagetable = [Prot.NONE] * 256
+        self._dep = False
 
         self._output = TestOutput()
         self._wait_input = None
@@ -61,6 +63,8 @@ class Cpu(metaclass=CpuMeta):
             if (self._r[Reg.PC] & 0x1) != 0:
                 raise ExecError('PC unaligned')
             self._r[Reg.PC] = inst.pc
+            if self._pagetable[inst.pc >> 8] == Prot.NOEXEC and self._dep:
+                raise ExecError('PC in non-executable page')
             if inst.format == Format.SINGLE:
                 self._exec_single(inst)
             elif inst.format == Format.JUMP:
@@ -127,6 +131,8 @@ class Cpu(metaclass=CpuMeta):
     def _write_data(self, addr, data, width):
         if width.octets == 2 and (addr & 0x1) != 0:
             raise ExecError('store address unaligned')
+        if self._pagetable[(addr & 0xffff) >> 8] == Prot.NOWRITE and self._dep:
+            raise ExecError('write to non-writable page')
         self._mem[addr & 0xffff] = data & 0xff
         if width.octets == 2:
             self._mem[(addr + 1) & 0xffff] = data >> 8
@@ -165,12 +171,16 @@ class Cpu(metaclass=CpuMeta):
 
     def _gate(self):
         interrupt = self._r[Reg.SR] >> 8
-        top = self._r[Reg.SP]
+        arg = self._r[Reg.SP] + 6
         if interrupt == 0x80:
-            self._output.write(chr(self._read_data(top + 6)))
+            self._output.write(chr(self._read_data(arg)))
         elif interrupt == 0x82:
-            self._wait_input = TestInput(self._read_data(top + 6),
-                                         self._read_data(top + 8))
+            self._wait_input = TestInput(self._read_data(arg),
+                                         self._read_data(arg + 2))
+        elif interrupt == 0x90:
+            self._dep = True
+        elif interrupt == 0x91:
+            self._pagetable[self._read_data(arg)] = self._read_data(arg + 2)
         elif interrupt == 0xa0:
             self._r[15] = random.randint(0, 0xffff)
         elif interrupt == 0xff:
@@ -367,6 +377,12 @@ class Flag:
     N      = 0b000000100
     CPUOFF = 0b000010000
     V      = 0b100000000
+
+
+class Prot:
+    NOWRITE = 0
+    NOEXEC  = 1
+    NONE    = 2
 
 
 class ExecError(Exception): pass
