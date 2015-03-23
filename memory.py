@@ -121,7 +121,7 @@ class Memory(bytearray):
             c3 = ''.join(chars)
             print("%s   %s   %s" % (c1, c2, c3), file=file)
 
-    def listing(self, file=None):
+    def listing(self, *, listraw=False, file=None):
         """Writes a listing to (file) (default sys.stdout)."""
         if file is None:
             file = sys.stdout
@@ -129,6 +129,8 @@ class Memory(bytearray):
         for idx, (base, label) in enumerate(self.labels):
             if label == '.end':
                 break
+            if idx != 0:
+                print()
             if label.startswith('.strings'):
                 nextbase = self.labels[idx+1][0]
                 print("%04x .strings:" % base, file=file)
@@ -146,6 +148,9 @@ class Memory(bytearray):
                 raw = ' '.join(textwrap.wrap(raw, 4))
                 mnemonic, ops = dasm.disassemble(inst)
                 ops = ', '.join(ops)
-                line = "%04x:  %-14s %-9s %s" % (base, raw, mnemonic, ops)
+                if listraw:
+                    line = "%04x:  %-14s %-9s %s" % (base, raw, mnemonic, ops)
+                else:
+                    line = "%04x:  %-9s %s" % (base, mnemonic, ops)
                 print(line.strip(), file=file)
                 base = inst.pc
