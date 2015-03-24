@@ -209,7 +209,7 @@ class Cpu(metaclass=CpuMeta):
             self.set_flag(Flag.C, True)
         result = ((v1 & width.max) >> 1) | msb
         self.set_flag(Flag.N, msb != 0)
-        self.set_flag(Flag.Z, result = 0)
+        self.set_flag(Flag.Z, result == 0)
         return result
 
     def SXT(self, v1, width):
