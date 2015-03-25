@@ -10,6 +10,7 @@ from memory import Memory
 class Monitor(metaclass=CpuMeta):
     def __init__(self, level):
         self._level = level
+        self._bps = {}
         self.reset()
 
     def _getr(self, reg):
@@ -24,7 +25,7 @@ class Monitor(metaclass=CpuMeta):
         self._cpu = Cpu(self._mem)
         self._d = Disassembler(self._mem.labels, self._mem.strings)
         self._unlocked = False
-        self._bps = {}
+        self._cbrk = None
         self.E()
 
     def brk(self, target=False):
@@ -55,21 +56,28 @@ class Monitor(metaclass=CpuMeta):
             bps[addr] = (addr, target)
             print("set breakpoint %04x" % addr)
 
-    def C(self):
+    def C(self, b=None):
+        if b is not None:
+            if b != self._cbrk:
+                self.brk(b)
+            self._cbrk = b
         try:
             c = self._cpu
             c.exec()
-            #inst = c.next_inst()
             while c.pc not in self._bps:
                 c.exec()
             self.E()
+            if self._cbrk is not None:
+                self.brk(self._cbrk)
         except ExecError as e:
             print(str(e))
         except DoorUnlocked:
             self._unlocked = True
             print("DOOR UNLOCKED!")
 
-    def D(self, line1, line2):
+    def D(self, line1, line2=None):
+        if line2 is None:
+            line2 = line1
         line1 &= 0xfff0
         line2 &= 0xfff0
         for line in range(line1, line2+0x10, 0x10):
