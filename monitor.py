@@ -28,7 +28,7 @@ class Monitor(metaclass=CpuMeta):
         self._cbrk = None
         self.E()
 
-    def brk(self, target=False):
+    def brk(self, target=False, *, silent=False):
         if target is None:
             self._bps = {}
             return
@@ -51,15 +51,17 @@ class Monitor(metaclass=CpuMeta):
         bps = self._bps
         if addr in bps:
             del bps[addr]
-            print("clear breakpoint %04x" % addr)
+            if not silent:
+                print("clear breakpoint %04x" % addr)
         else:
             bps[addr] = (addr, target)
-            print("set breakpoint %04x" % addr)
+            if not silent:
+                print("set breakpoint %04x" % addr)
 
     def C(self, b=None):
         if b is not None:
             if b != self._cbrk:
-                self.brk(b)
+                self.brk(b, silent=True)
             self._cbrk = b
         try:
             c = self._cpu
@@ -68,7 +70,7 @@ class Monitor(metaclass=CpuMeta):
                 c.exec()
             self.E()
             if self._cbrk is not None:
-                self.brk(self._cbrk)
+                self.brk(self._cbrk, silent=True)
                 self._cbrk = None
         except ExecError as e:
             print(str(e))
@@ -120,6 +122,15 @@ class Monitor(metaclass=CpuMeta):
             c.send_input(ibytes)
         except ExecError as e:
             print(str(e))
+
+    def N(self):
+        c = self._cpu
+        inst = c.next_inst()
+        oldcbrk = self._cbrk
+        oldbps = self._bps
+        self.C(inst.pc)
+        self._cbrk = oldcbrk
+        self._bps = oldbps
 
     def S(self):
         try:
