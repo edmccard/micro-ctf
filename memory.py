@@ -93,8 +93,8 @@ class Memory(bytearray):
         self[self._write_addr] = val
         self._write_addr = (self._write_addr + 1) & 0xffff
 
-    def _read_word(self, addr):
-        return (self[addr] << 8) | self[(addr + 1) & 0xffff]
+    def read_word(self, addr):
+        return self[addr] | (self[(addr + 1) & 0xffff] << 8)
 
     def dump(self, file=None):
         """Writes a hex dump to (file) (default sys.stdout)."""
@@ -140,7 +140,7 @@ class Memory(bytearray):
                 continue
             print("%04x <%s>" % (base, label), file=file)
             while base < self.labels[idx+1][0]:
-                if self._read_word(base) == 0:
+                if self.read_word(base) == 0:
                     base += 2
                     continue
                 inst = Instruction(self, base)

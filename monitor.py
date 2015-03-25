@@ -69,6 +69,7 @@ class Monitor(metaclass=CpuMeta):
             self.E()
             if self._cbrk is not None:
                 self.brk(self._cbrk)
+                self._cbrk = None
         except ExecError as e:
             print(str(e))
         except DoorUnlocked:
