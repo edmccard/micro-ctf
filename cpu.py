@@ -303,7 +303,7 @@ class Cpu(metaclass=CpuMeta):
             a = (v1 >> (i * 4)) & 0xf
             b = (v2 >> (i * 4)) & 0xf
             temp = a + b + c
-            n = (temp & 0x8) != 0
+            #n = (temp & 0x8) != 0
             if temp >= 10:
                 temp -= 10
                 c = 1
@@ -313,7 +313,6 @@ class Cpu(metaclass=CpuMeta):
             i += 1
 
         self._r[Reg.SR] &= 0xff
-        self.set_flag(Flag.N, n)
         self.set_flag(Flag.Z, result == 0)
         self.set_flag(Flag.C, c != 0)
         return result
