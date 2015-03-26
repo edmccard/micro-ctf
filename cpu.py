@@ -299,8 +299,7 @@ class Cpu(metaclass=CpuMeta):
         self.SUB(v1, v2, width)
 
     def DADD(self, v1, v2, width):
-        c = 1 if self.flag(Flag.C) else 0
-        result = 0
+        result = c = 0
 
         i = 0
         while i < width.nibbles:
@@ -313,7 +312,7 @@ class Cpu(metaclass=CpuMeta):
                 c = 1
             else:
                 c = 0
-            result |= ((temp & 0xf) << i)
+            result |= ((temp & 0xf) << i * 4)
             i += 1
 
         self._r[Reg.SR] &= 0xff
