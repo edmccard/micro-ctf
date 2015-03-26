@@ -26,6 +26,8 @@ class Monitor(metaclass=CpuMeta):
         self._d = Disassembler(self._mem.labels, self._mem.strings)
         self._unlocked = False
         self._cbrk = None
+        self._tracefile = None
+        self._tracing = False
         self.E()
 
     def brk(self, target=False, *, silent=False):
@@ -58,25 +60,58 @@ class Monitor(metaclass=CpuMeta):
             if not silent:
                 print("set breakpoint %04x" % addr)
 
-    def C(self, b=None):
-        if b is not None:
-            if b != self._cbrk:
-                self.brk(b, silent=True)
-            self._cbrk = b
+    def trace(self, tracefile=None):
+        if tracefile is None:
+            if self._tracefile is None:
+                print("please specify a trace file")
+                return
+            if self._tracing:
+                self._tracing = False
+                print("trace off")
+            else:
+                self._tracing = True
+                print("trace on")
+        else:
+            if self._tracefile is None:
+                self._tracing = True
+                print("trace on")
+            self._tracefile = tracefile
+
+    def _step(self):
         try:
-            c = self._cpu
-            c.exec()
-            while c.pc not in self._bps:
-                c.exec()
-            self.E()
-            if self._cbrk is not None:
-                self.brk(self._cbrk, silent=True)
-                self._cbrk = None
+            inst = self._cpu.next_inst()
+            if self._tracing:
+                mnem, ops = self._d.disassemble(inst)
+                print('%04x: %-6s %s' %
+                      (inst.startpc, mnem, ', '.join(ops)),
+                      file=self._tracefile)
+            self._cpu.exec_inst(inst)
+            return True
         except ExecError as e:
             print(str(e))
         except DoorUnlocked:
             self._unlocked = True
             print("DOOR UNLOCKED!")
+        return False
+
+    def C(self, b=None):
+        if b is not None:
+            if b != self._cbrk:
+                self.brk(b, silent=True)
+            self._cbrk = b
+        if self._tracing:
+            print(file=self._tracefile)
+            print("CONTINUE", file=self._tracefile)
+            print(file=self._tracefile)
+        while True:
+            if not self._step():
+                break
+            if self._cpu.pc in self._bps:
+                self.E()
+                break
+        if self._cbrk is not None:
+            self.brk(self._cbrk, silent=True)
+            self._cbrk = None
 
     def D(self, line1, line2=None):
         if line2 is None:
@@ -133,16 +168,8 @@ class Monitor(metaclass=CpuMeta):
         self._bps = oldbps
 
     def S(self):
-        try:
-            c = self._cpu
-            c.exec()
+        if self._step():
             self.E()
-        except ExecError as e:
-            print(str(e))
-        except DoorUnlocked:
-            self._unlocked = True
-            print("DOOR UNLOCKED!")
-
 
 def test(soldir):
     f = open(os.path.join(soldir, 'solutions.txt'))
