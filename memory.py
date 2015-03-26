@@ -72,6 +72,7 @@ class Memory(bytearray):
                     self._write_word(int(part, 16))
 
         self.labels.append((self._write_addr, '.end'))
+        self._dasm = Disassembler(self.labels, self.strings)
 
     def _load_hex(self, f):
         for line in self._file_reader(f):
@@ -121,16 +122,37 @@ class Memory(bytearray):
             c3 = ''.join(chars)
             print("%s   %s   %s" % (c1, c2, c3), file=file)
 
+    def _disasm(self, inst, *, listraw=False, file=None):
+        if file is None:
+            file = sys.stdout
+        base = inst.startpc
+        raw = ''.join(map(lambda x: "%02x" % x, self[base:inst.pc]))
+        raw = ' '.join(textwrap.wrap(raw, 4))
+        mnemonic, ops = self._dasm.disassemble(inst)
+        ops = ', '.join(ops)
+        if listraw:
+            line = "%04x:  %-14s %-9s %s" % (base, raw, mnemonic, ops)
+        else:
+            line = "%04x:  %-9s %s" % (base, mnemonic, ops)
+        print(line.strip(), file=file)
+
+    def disassemble(self, startpc, endpc, *, file=None):
+        if file is None:
+            file = sys.stdout
+        while startpc < endpc:
+            inst = Instruction(self, startpc)
+            self._disasm(inst, listraw=False, file=file)
+            startpc = inst.pc
+
     def listing(self, *, listraw=False, file=None):
         """Writes a listing to (file) (default sys.stdout)."""
         if file is None:
             file = sys.stdout
-        dasm = self._dasm = Disassembler(self.labels, self.strings)
         for idx, (base, label) in enumerate(self.labels):
             if label == '.end':
                 break
             if idx != 0:
-                print()
+                print(file=file)
             if label.startswith('.strings'):
                 nextbase = self.labels[idx+1][0]
                 print("%04x .strings:" % base, file=file)
@@ -144,13 +166,5 @@ class Memory(bytearray):
                     base += 2
                     continue
                 inst = Instruction(self, base)
-                raw = ''.join(map(lambda x: "%02x" % x, self[base:inst.pc]))
-                raw = ' '.join(textwrap.wrap(raw, 4))
-                mnemonic, ops = dasm.disassemble(inst)
-                ops = ', '.join(ops)
-                if listraw:
-                    line = "%04x:  %-14s %-9s %s" % (base, raw, mnemonic, ops)
-                else:
-                    line = "%04x:  %-9s %s" % (base, mnemonic, ops)
-                print(line.strip(), file=file)
+                self._disasm(inst, listraw=listraw, file=file)
                 base = inst.pc
