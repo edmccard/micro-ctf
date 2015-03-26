@@ -177,6 +177,7 @@ class Cpu(metaclass=CpuMeta):
         elif interrupt == 0x82:
             self._wait_input = TestInput(self._read_data(arg),
                                          self._read_data(arg + 2))
+            self._output.flush()
         elif interrupt == 0x90:
             self._dep = True
         elif interrupt == 0x91:
@@ -358,13 +359,18 @@ class TestInput:
 class TestOutput:
     def __init__(self):
         self.text = ''
+    def flush(self):
+        if self.text == '':
+            return
+        print("OUTPUT:", self.text)
+        self.text = ''
     def write(self, text):
-        if text != '\n':
-            self.text += text
-        else:
-            print("OUTPUT:", self.text)
+        lines = text.split('\n')
+        while len(lines) > 1:
+            print("OUTPUT:", self.text + lines[0])
             self.text = ''
-
+            lines = lines[1:]
+        self.text += lines[0]
 
 class Flag:
     C      = 0b000000001
