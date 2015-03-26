@@ -147,9 +147,11 @@ class Monitor(metaclass=CpuMeta):
 def test(soldir):
     f = open(os.path.join(soldir, 'solutions.txt'))
     ok = True
+    fails = []
 
     for line in f:
         level, sol = line.split()
+        print("testing", level)
         m = Monitor(os.path.join(soldir, level))
         try:
             m.C()
@@ -158,10 +160,17 @@ def test(soldir):
                 m.C()
             if not m._unlocked:
                 ok = False
+                fails.append(level)
                 print(level, "failed")
         except:
+            fails.append(level)
             print(level, " failed")
             ok = False
+
+    if not ok:
+        print("Failures:")
+        for fail in fails:
+            print(fail)
 
     f.close()
     return ok
