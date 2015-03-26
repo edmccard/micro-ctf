@@ -204,12 +204,9 @@ class Cpu(metaclass=CpuMeta):
     def RRA(self, v1, width):
         self._r[Reg.SR] &= 0xff
         msb = width.neg & v1
-        # RRA sets, but never clears, the C flag
-        if (v1 & 0x1) != 0:
-            self.set_flag(Flag.C, True)
+        if msb != 0:
+            self.set_flag(Flag.N, True)
         result = ((v1 & width.max) >> 1) | msb
-        self.set_flag(Flag.N, msb != 0)
-        self.set_flag(Flag.Z, result == 0)
         return result
 
     def SXT(self, v1, width):
