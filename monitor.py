@@ -8,9 +8,10 @@ from memory import Memory
 
 
 class Monitor(metaclass=CpuMeta):
-    def __init__(self, level):
+    def __init__(self, level, *, seed=None):
         self._level = level
         self._bps = {}
+        self._seed = seed
         self.reset()
 
     def _getr(self, reg):
@@ -22,7 +23,7 @@ class Monitor(metaclass=CpuMeta):
     def reset(self):
         self._mem = Memory()
         self._mem.load(self._level)
-        self._cpu = Cpu(self._mem)
+        self._cpu = Cpu(self._mem, self._seed)
         self._d = Disassembler(self._mem.labels, self._mem.strings)
         self._unlocked = False
         self._cbrk = None

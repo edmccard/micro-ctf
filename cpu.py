@@ -18,8 +18,9 @@ class CpuMeta(type):
 
 
 class Cpu(metaclass=CpuMeta):
-    def __init__(self, mem):
-        random.seed()
+    def __init__(self, mem, *, seed=None):
+        self._seed = seed
+        random.seed(seed)
         self._mem = mem
         self._r = array('H', [0] * 16)
         self._r[Reg.PC] = self._read_data(0xfffe)
@@ -183,7 +184,10 @@ class Cpu(metaclass=CpuMeta):
         elif interrupt == 0x91:
             self._pagetable[self._read_data(arg)] = self._read_data(arg + 2)
         elif interrupt == 0xa0:
-            self._r[15] = random.randint(0, 0xffff)
+            if self._seed == 0:
+                self._r[15] = 0
+            else:
+                self._r[15] = random.randint(0, 0xffff)
         elif interrupt == 0xff:
             self.set_flag(Flag.CPUOFF, True)
             raise DoorUnlocked()
