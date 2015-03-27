@@ -23,7 +23,7 @@ class Monitor(metaclass=CpuMeta):
     def reset(self):
         self._mem = Memory()
         self._mem.load(self._level)
-        self._cpu = Cpu(self._mem, self._seed)
+        self._cpu = Cpu(self._mem, seed=self._seed)
         self._d = Disassembler(self._mem.labels, self._mem.strings)
         self._unlocked = False
         self._cbrk = None
@@ -78,15 +78,19 @@ class Monitor(metaclass=CpuMeta):
                 print("trace on")
             self._tracefile = tracefile
 
+    def _getdis(self, inst):
+        mnem, ops = self._d.disassemble(inst)
+        return '%04x: %-6s %s' % (inst.startpc, mnem, ', '.join(ops))
+
+    def _gettrace(self, inst):
+        return self._getdis(inst)
+
     def _step(self):
         try:
             inst = self._cpu.next_inst()
-            if self._tracing:
-                mnem, ops = self._d.disassemble(inst)
-                print('%04x: %-6s %s' %
-                      (inst.startpc, mnem, ', '.join(ops)),
-                      file=self._tracefile)
             self._cpu.exec_inst(inst)
+            if self._tracing:
+                print(self._gettrace(inst), file=self._tracefile)
             return True
         except ExecError as e:
             print(str(e))
@@ -138,9 +142,7 @@ class Monitor(metaclass=CpuMeta):
               (c.r8, c.r9, c.r10, c.r11, c.r12, c.r13, c.r14, c.r15))
         print('-' * 78)
         inst = c.next_inst()
-        mnem, ops = self._d.disassemble(inst)
-        print('%04x: %-6s %s' %
-              (inst.startpc, mnem, ', '.join(ops)))
+        print(self._getdis(inst))
 
     def I(self, ibytes=None):
         try:
@@ -171,6 +173,31 @@ class Monitor(metaclass=CpuMeta):
     def S(self):
         if self._step():
             self.E()
+
+
+class MonitorX(Monitor):
+    def reset(self):
+        super().reset()
+        self._cpu = CpuX(self._cpu._mem, seed=self._seed)
+
+    def _gettrace(self, inst):
+        mnem, ops = self._d.disassemble(inst)
+        d1 = '%04x: %-6s %s' % (inst.startpc, mnem, ', '.join(ops))
+        d2 = []
+        if inst.format != Format.JUMP:
+            try:
+                for lv in inst.live[:-1]:
+                    if len(lv) == 1:
+                        lvstr = "%04x" % lv[0]
+                    else:
+                        lvstr = "[%04x]:%04x" % (lv[0], lv[1])
+                    d2.append(lvstr)
+                if inst.live[-1] is not None:
+                    d2.append("%04x" % inst.live[-1])
+            except AttributeError:
+                print(inst.format)
+        return d1 + ' -- ' + ' '.join(d2)
+
 
 def test(soldir):
     f = open(os.path.join(soldir, 'solutions.txt'))

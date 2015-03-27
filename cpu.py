@@ -87,6 +87,10 @@ class Cpu(metaclass=CpuMeta):
         else:
             self._r[Reg.SR] &= (~mask & 0xffff)
 
+    def get_input_info(self):
+        if self._wait_input is not None:
+            return self._wait_input.get_info()
+
     def send_input(self, ibytes):
         if self._wait_input is None:
             raise ExecError('not ready for input')
@@ -152,6 +156,7 @@ class Cpu(metaclass=CpuMeta):
         result = self._single[inst.opcode](data, inst.width)
         if inst.opcode < Op.PUSH:
             self._writeback(inst, 0, addr, result)
+            return result
 
     def _exec_jump(self, inst):
         cond = inst.opcode
@@ -169,6 +174,8 @@ class Cpu(metaclass=CpuMeta):
         if inst.startpc == 0x0010 \
            and self._read_data(0x0010) == 0x4130:
             self._gate()
+
+        return result
 
     def _gate(self):
         interrupt = self._r[Reg.SR] >> 8
@@ -353,6 +360,9 @@ class TestInput:
         self._ptr = ptr
         self._length = length
 
+    def get_info(self):
+        return (self._ptr, self._length)
+
     def enter(self, c, ibytes):
         for i in range(min(self._length, len(ibytes))):
             c._write_data(self._ptr, ibytes[i], Width.Byte)
@@ -392,3 +402,30 @@ class Prot:
 
 class ExecError(Exception): pass
 class DoorUnlocked(Exception): pass
+
+
+class CpuX(Cpu):
+    def _exec_single(self, inst):
+        inst.live = [None, None]
+        result = super()._exec_single(inst)
+        inst.live[1] = result
+        if inst.opcode == Op.RETI:
+            inst.live[0] = None
+
+
+        return result
+
+    def _exec_dual(self, inst):
+        inst.live = [None, None, None]
+        result = super()._exec_dual(inst)
+        inst.live[2] = result
+        return result
+
+    def _resolve_data(self, inst, n):
+        l1, l2 = super()._resolve_data(inst, n)
+        mode, _ = inst.mv[n]
+        if mode == AM.REGISTER or mode == AM.CONSTANT or mode == AM.IMMEDIATE:
+            inst.live[n] = (l2,)
+        else:
+            inst.live[n] = (l1, l2)
+        return l1, l2

@@ -38,7 +38,7 @@ class Instruction:
               see AddrMode for the various meanings of value
     """
     __slots__ = ['pc', 'startpc', 'valid', 'format',
-                 'opcode', 'width', 'mv']
+                 'opcode', 'width', 'mv', 'live']
 
     _widths = [Width.Word, Width.Byte]
 
