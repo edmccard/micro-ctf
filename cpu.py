@@ -211,7 +211,7 @@ class Cpu(metaclass=CpuMeta):
         return result
 
     def SWPB(self, v1, width):
-        return (v1 >> 8) | (v1 << 8)
+        return (v1 >> 8) | ((v1 << 8) & 0xffff)
 
     def RRA(self, v1, width):
         self._r[Reg.SR] &= 0xff

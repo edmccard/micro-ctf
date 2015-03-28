@@ -196,7 +196,7 @@ class MonitorX(Monitor):
                     d2.append("%04x" % inst.live[-1])
             except AttributeError:
                 print(inst.format)
-        return d1 + ' -- ' + ' '.join(d2)
+        return "%-35s--%s" % (d1, ' ' + ' '.join(d2))
 
 
 def test(soldir):
